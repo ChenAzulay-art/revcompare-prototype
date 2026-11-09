@@ -504,7 +504,51 @@ function renderBottomBar() {
    RENDER: summary
    ===================================================================== */
 function renderSummary() {
-  app.innerHTML = "";
+  const s = DATA.sheet;
+  const critical = DATA.changes.filter(c => c.critical);
+  app.innerHTML = `
+    <div class="page">
+      <div class="summary-head">
+        <div>
+          <h1>You've reviewed ${reviewedCount()} of ${plural(totalCount(), "change")}</h1>
+          <p class="muted">${roleLabel()} · ${fmtDate(new Date())} · ${s.number} ${s.title}, Rev ${s.from.rev} → Rev ${s.to.rev}</p>
+        </div>
+        <div class="actions no-print">
+          <button class="btn" data-action="print">Export PDF</button>
+          <button class="btn primary" data-action="go-documents">Back to documents</button>
+        </div>
+      </div>
+      <section class="card">
+        <h2>Critical changes (${critical.length})</h2>
+        ${critical.length ? critical.map(criticalHTML).join("") : `<p class="muted">No critical changes.</p>`}
+      </section>
+      <section class="card">
+        <h2>All changes by type</h2>
+        ${DATA.types.map(typeSummaryHTML).join("")}
+      </section>
+    </div>`;
+}
+
+function criticalHTML(c) {
+  return `
+    <div class="sum-crit">
+      <div><span class="num t-${typeOf(c)}">${c.id}</span> <b>${esc(c.title)}</b> <span class="muted">· ${esc(c.location)}</span></div>
+      <div class="diff"><s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></div>
+      ${c.note ? `<div class="note">${esc(c.note)}</div>` : ""}
+    </div>`;
+}
+
+function typeSummaryHTML(t) {
+  const items = changesOfType(t.id);
+  return `
+    <h3><i class="sw t-${t.id}"></i>${t.label} <span class="muted">${items.length}</span></h3>
+    <ul class="compact">
+      ${items.length ? items.map(c => `
+        <li><span class="num t-${t.id}">${c.id}</span>
+          <span>${esc(c.title)} <span class="muted diff">— <s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></span>
+          ${state.typeOverride[c.id] ? `<span class="tag">reclassified from ${typeLabel(c.type)}</span>` : ""}</span></li>`).join("")
+        : `<li class="muted">None</li>`}
+    </ul>`;
 }
 
 /* =====================================================================
