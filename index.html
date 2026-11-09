@@ -90,7 +90,7 @@
   .item .diff { font-size: 13px; margin-top: 4px; }
   .tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .controls { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 0 28px; }
-  .retype { font-size: 12px; padding: 2px 4px; color: var(--muted); cursor: pointer; }
+  .retype { width: 72px; font-size: 12px; padding: 2px 4px; color: var(--muted); cursor: pointer; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
   .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 
@@ -342,7 +342,162 @@ function renderDocuments() {
    RENDER: compare
    ===================================================================== */
 function renderCompare() {
-  app.innerHTML = `<div class="page">Compare view — coming next. <a href="#" data-action="go-documents">← Documents</a></div>`;
+  const s = DATA.sheet;
+  const warn = DATA.changes.find(c => c.sheetWarning);
+  app.innerHTML = `
+    <div class="compare">
+      <div class="topbar">
+        <a href="#" data-action="go-documents">← Documents</a>
+        <div><b>${s.number} ${s.title}</b> · Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
+          <span class="muted">· uploaded by ${s.to.uploadedBy}</span></div>
+      </div>
+      ${warn ? `<div class="warning">⚠ <b>${esc(warn.title)}.</b> ${esc(warn.note)}
+        <a href="#" data-action="select" data-id="${warn.id}">Show in list</a></div>` : ""}
+      <div class="split">
+        <aside class="list" id="list"></aside>
+        <section class="viewer" id="viewer"></section>
+      </div>
+      <div class="bottombar" id="bottombar"></div>
+    </div>`;
+  renderList();
+  renderViewer();
+  renderBottomBar();
+}
+
+/* ---------- Change list ---------- */
+function renderList() {
+  document.getElementById("list").innerHTML = DATA.types.map(t => {
+    const items = changesOfType(t.id);
+    const open = !state.collapsed[t.id];
+    return `
+      <div class="group">
+        <button class="group-head" data-action="toggle-group" data-type="${t.id}">
+          <span class="chev">${open ? "▾" : "▸"}</span><i class="sw t-${t.id}"></i>${t.label}
+          <span class="count">${items.length}</span>
+        </button>
+        ${!open && t.id === "minor" ? `<div class="group-note">Hidden by default — below significance threshold</div>` : ""}
+        ${open ? items.map(itemHTML).join("") : ""}
+      </div>`;
+  }).join("");
+}
+
+function itemHTML(c) {
+  const done = isReviewed(c);
+  const otherTypes = DATA.types.filter(t => t.id !== typeOf(c));
+  return `
+    <div class="item ${c.id === state.selectedId ? "selected" : ""} ${done ? "done" : ""}" id="item-${c.id}" data-action="select" data-id="${c.id}">
+      <div class="item-body">
+        <div class="item-title"><span class="num t-${typeOf(c)}">${c.id}</span>${esc(c.title)}</div>
+        <div class="item-sub">
+          <div class="loc">${esc(c.location)}</div>
+          <div class="diff"><s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></div>
+          <div class="tags">
+            ${c.critical ? `<span class="tag crit">Critical</span>` : ""}
+            <span class="tag conf-${c.confidence}">${cap(c.confidence)} confidence</span>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <select class="retype" data-action="retype" data-id="${c.id}" title="Reclassify">
+          <option selected disabled hidden>Type ▾</option>
+          ${otherTypes.map(t => `<option value="${t.id}">Move to ${t.label}</option>`).join("")}
+        </select>
+        <label class="check"><input type="checkbox" data-action="review" data-id="${c.id}" ${done ? "checked" : ""}> Mark reviewed</label>
+      </div>
+    </div>`;
+}
+
+/* ---------- Drawing viewer ---------- */
+function renderViewer() {
+  const s = DATA.sheet;
+  const imgA = `<img src="${s.from.image}" alt="Rev ${s.from.rev}">`;
+  const imgB = `<img src="${s.to.image}" alt="Rev ${s.to.rev}">`;
+  const labelA = `Rev ${s.from.rev} · ${fmtDate(s.from.date)}`;
+  const labelB = `Rev ${s.to.rev} · ${fmtDate(s.to.date)}`;
+  let panes;
+  if (state.viewMode === "side") panes = paneHTML(labelA, imgA) + paneHTML(labelB, imgB);
+  if (state.viewMode === "overlay") panes = paneHTML(`${labelB} over ${labelA}`,
+    imgA + `<img class="top" src="${s.to.image}" alt="Rev ${s.to.rev}" style="opacity:${state.opacity / 100}">`);
+  if (state.viewMode === "b") panes = paneHTML(labelB, imgB);
+
+  const modes = [["side", "Side by side"], ["overlay", "Overlay"], ["b", `Rev ${s.to.rev} only`]];
+  document.getElementById("viewer").innerHTML = `
+    <div class="toolbar">
+      <div class="seg">${modes.map(([id, label]) =>
+        `<button data-action="mode" data-mode="${id}" class="${state.viewMode === id ? "on" : ""}">${label}</button>`).join("")}</div>
+      ${state.viewMode === "overlay" ? `<label class="opacity">Rev ${s.to.rev} opacity
+        <input type="range" min="0" max="100" value="${state.opacity}" data-action="opacity"></label>` : ""}
+      <button class="btn" data-action="fit">Fit to sheet</button>
+      <div class="legend">
+        ${DATA.types.map(t => `<span><i class="sw t-${t.id}"></i>${t.label}</span>`).join("")}
+        <span><i class="sw crit"></i>Critical</span>
+      </div>
+    </div>
+    <div class="info" id="info" hidden></div>
+    <div class="stage">${panes}</div>`;
+  updateViewer(false);
+}
+
+function paneHTML(label, images) {
+  const boxes = DATA.changes.filter(c => c.box).map(c => {
+    const [x0, y0, x1, y1] = c.box.map(v => v * 100);
+    return `<div class="box" data-action="select" data-id="${c.id}"
+      style="left:${x0}%;top:${y0}%;width:${x1 - x0}%;height:${y1 - y0}%"><span>${c.id}</span></div>`;
+  }).join("");
+  return `<div class="pane"><div class="pane-label">${label}</div>
+    <div class="frame"><div class="canvas">${images}${boxes}</div></div></div>`;
+}
+
+// Updates boxes, info strip and zoom on the existing DOM (so the zoom can animate)
+function updateViewer(pulse) {
+  const sel = findChange(state.selectedId);
+
+  document.querySelectorAll(".box").forEach(el => {
+    const c = findChange(Number(el.dataset.id));
+    el.className = `box t-${typeOf(c)}${c.critical ? " crit" : ""}${c.id === state.selectedId ? " selected" : ""}`;
+    el.hidden = !!state.collapsed[typeOf(c)];
+  });
+
+  // Whole-sheet changes (box: null) show their details above the drawing
+  const info = document.getElementById("info");
+  info.hidden = !(sel && !sel.box);
+  if (sel && !sel.box) info.innerHTML = `<b>#${sel.id} ${esc(sel.title)}</b> · whole-sheet change ·
+    <span class="diff"><s>${esc(sel.before)}</s> → <ins>${esc(sel.after)}</ins></span>${sel.note ? ` · ${esc(sel.note)}` : ""}`;
+
+  // Same zoom for every frame, so side-by-side panes stay comparable
+  document.querySelectorAll(".frame").forEach(frame => {
+    const fw = frame.clientWidth, fh = frame.clientHeight;
+    const w = Math.min(fw, fh / imgRatio), h = w * imgRatio;   // image fitted to the frame
+    let scale = 1, tx = (fw - w) / 2, ty = (fh - h) / 2;
+    if (state.zoomed && sel && sel.box) {
+      const [x0, y0, x1, y1] = sel.box;
+      scale = Math.max(1, Math.min(0.6 * fw / ((x1 - x0) * w), 0.6 * fh / ((y1 - y0) * h), 4));
+      tx = fw / 2 - scale * w * (x0 + x1) / 2;
+      ty = fh / 2 - scale * h * (y0 + y1) / 2;
+    }
+    const canvas = frame.querySelector(".canvas");
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.style.setProperty("--s", scale);
+    canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  });
+
+  if (pulse) document.querySelectorAll(".box.selected").forEach(el => el.classList.add("pulse"));
+}
+
+/* ---------- Bottom bar ---------- */
+function renderBottomBar() {
+  const n = totalCount(), x = reviewedCount(), left = n - x;
+  const pct = n ? Math.round(x / n * 100) : 100;
+  document.getElementById("bottombar").innerHTML = `
+    <div class="progress">
+      <span><b>${x} of ${n}</b> reviewed by you <span class="muted">(${roleLabel()})</span></span>
+      <div class="bar"><div style="width:${pct}%"></div></div>
+    </div>
+    <button class="btn" data-action="next" ${left ? "" : "disabled"}>Next unreviewed</button>
+    <span title="${left ? `${plural(left, "change")} left to review` : "All changes reviewed"}">
+      <button class="btn primary" data-action="finish" ${left ? "disabled" : ""}>Finish review</button>
+    </span>`;
 }
 
 /* =====================================================================
@@ -366,21 +521,87 @@ function openCompare() {
   goTo("compare");
 }
 
+// Select a change: expand its group, highlight it in the list and zoom to it on the drawing
+function selectChange(id) {
+  const c = findChange(id);
+  if (!c) return;
+  state.selectedId = id;
+  state.zoomed = true;
+  state.collapsed[typeOf(c)] = false;
+  renderList();
+  updateViewer(true);
+  document.getElementById("item-" + id).scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function nextUnreviewed() {
+  const list = orderedChanges();
+  const start = list.findIndex(c => c.id === state.selectedId);
+  for (let i = 1; i <= list.length; i++) {
+    const c = list[(start + i) % list.length];
+    if (!isReviewed(c)) return selectChange(c.id);
+  }
+}
+
+function toggleReviewed(id, checked) {
+  const set = state.reviewed[state.role];
+  checked ? set.add(id) : set.delete(id);
+  renderList();
+  renderBottomBar();
+}
+
+function reclassify(id, typeId) {
+  const c = findChange(id);
+  if (typeId === c.type) delete state.typeOverride[id];
+  else state.typeOverride[id] = typeId;
+  renderList();
+  updateViewer(false);
+}
+
+function toggleGroup(typeId) {
+  state.collapsed[typeId] = !state.collapsed[typeId];
+  renderList();
+  updateViewer(false);
+}
+
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
   if (!el) return;
   if (el.tagName === "A") e.preventDefault();
+  const id = Number(el.dataset.id);
   switch (el.dataset.action) {
     case "open-compare": openCompare(); break;
     case "go-documents": goTo("documents"); break;
+    case "select": if (!e.target.closest("label, select")) selectChange(id); break;
+    case "toggle-group": toggleGroup(el.dataset.type); break;
+    case "mode": state.viewMode = el.dataset.mode; renderViewer(); break;
+    case "fit": state.zoomed = false; updateViewer(false); break;
+    case "next": nextUnreviewed(); break;
+    case "finish": goTo("summary"); break;
+    case "print": window.print(); break;
   }
 });
 
 document.addEventListener("change", e => {
   const el = e.target;
+  const id = Number(el.dataset.id);
   switch (el.dataset.action) {
-    case "role": state.role = el.value; render(); break;
+    case "role":
+      state.role = el.value;
+      if (state.screen === "compare") { renderList(); renderBottomBar(); } else render();
+      break;
+    case "review": toggleReviewed(id, el.checked); break;
+    case "retype": reclassify(id, el.value); break;
   }
+});
+
+document.addEventListener("input", e => {
+  if (e.target.dataset.action !== "opacity") return;
+  state.opacity = Number(e.target.value);
+  document.querySelector(".canvas img.top").style.opacity = state.opacity / 100;
+});
+
+window.addEventListener("resize", () => {
+  if (state.screen === "compare") updateViewer(false);
 });
 
 /* ---------- Init ---------- */
@@ -388,6 +609,15 @@ document.getElementById("crumbs").innerHTML =
   `Neve Rehovot – Building A <span>/</span> ${DATA.sheet.discipline} <span>/</span> Floor plans`;
 document.getElementById("role").innerHTML =
   ROLES.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
+
+// Read the drawing's aspect ratio once, so boxes line up with the image at any size
+const probe = new Image();
+probe.onload = () => {
+  imgRatio = probe.naturalHeight / probe.naturalWidth;
+  if (state.screen === "compare") updateViewer(false);
+};
+probe.src = DATA.sheet.to.image;
+
 render();
 </script>
 </body>
