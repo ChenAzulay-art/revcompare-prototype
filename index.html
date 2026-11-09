@@ -206,11 +206,24 @@
     .docs td:first-child { margin-bottom: 4px; }
     .docs td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: 12px; }
     .docs td[data-label="Changes vs. previous rev"]::before { display: block; margin: 4px 0 2px; }
+    /* The whole page scrolls (header scrolls away), so the drawing can use the full screen height */
+    html, body { height: auto; }
+    body { display: block; }
+    #app { overflow: visible; }
     .compare { height: auto; }
     .split { display: block; }
     .list { border-right: 0; }
-    .viewer { height: calc(100vh - 110px); }   /* fills the screen between header and bottom bar */
-    .legend { margin-left: 0; }
+    /* Visible screen height minus the bottom bar (--bar-h is measured in JS) */
+    .viewer { height: calc(100vh - var(--bar-h, 96px)); height: calc(100dvh - var(--bar-h, 96px)); }
+    /* Drawing toolbar: view modes on one row, zoom on the next; no legend */
+    .toolbar { gap: 8px 12px; }
+    .legend { display: none; }
+    /* Bottom bar: progress on one short row, the two buttons side by side below */
+    .bottombar { flex-wrap: wrap; gap: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+    .progress { flex-basis: 100%; }
+    .progress-role { display: none; }
+    .bottombar > .btn, .bottombar > span { flex: 1; }
+    .bottombar > span .btn { width: 100%; }
   }
 
   /* ---------- Print: summary only ---------- */
@@ -447,6 +460,7 @@ function renderCompare() {
   renderList();
   renderViewer();
   renderBottomBar();
+  updateViewer(false);   // re-fit now that the bottom bar's height is known
 }
 
 /* ---------- Change list ---------- */
@@ -655,13 +669,20 @@ function renderBottomBar() {
   const pct = n ? Math.round(x / n * 100) : 100;
   document.getElementById("bottombar").innerHTML = `
     <div class="progress">
-      <span><b>${x} of ${n}</b> reviewed by you <span class="muted">(${roleLabel()})</span></span>
+      <span><b>${x} of ${n}</b> reviewed by you <span class="muted progress-role">(${roleLabel()})</span></span>
       <div class="bar"><div style="width:${pct}%"></div></div>
     </div>
     <button class="btn" data-action="next" ${left ? "" : "disabled"}>Next unreviewed</button>
     <span title="${left ? `${plural(left, "change")} left to review` : "All changes reviewed"}">
       <button class="btn primary" data-action="finish" ${left ? "disabled" : ""}>Finish review</button>
     </span>`;
+  measureBottomBar();
+}
+
+// The phone layout sizes the drawing to "screen height minus bottom bar"; tell CSS how tall the bar is
+function measureBottomBar() {
+  const bar = document.getElementById("bottombar");
+  if (bar) document.documentElement.style.setProperty("--bar-h", bar.offsetHeight + "px");
 }
 
 /* =====================================================================
@@ -1031,7 +1052,9 @@ document.addEventListener("pointerup", endPointer);
 document.addEventListener("pointercancel", endPointer);   // the browser took over (e.g. page scroll)
 
 window.addEventListener("resize", () => {
-  if (state.screen === "compare") updateViewer(false);
+  if (state.screen !== "compare") return;
+  measureBottomBar();
+  updateViewer(false);
 });
 
 /* ---------- Init ---------- */
