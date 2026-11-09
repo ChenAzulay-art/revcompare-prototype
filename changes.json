@@ -1,0 +1,85 @@
+{
+  "_readme": "Mock detection results for sheet A-101, Rev A -> Rev B. Derived from a real comparison of rev_A.pdf and rev_B.pdf. 'box' is the change location as fractions of the image width/height (x0, y0, x1, y1), valid for both rev_A.png and rev_B_aligned.png (Rev B was aligned to Rev A). box = null means the change applies to the whole sheet.",
+  "sheet": {
+    "number": "A-101",
+    "title": "Typical Floor Plan",
+    "discipline": "Architecture",
+    "from": { "rev": "A", "uploadedBy": "Studio Levi Architects", "date": "2026-10-12", "image": "rev_A.png" },
+    "to":   { "rev": "B", "uploadedBy": "Studio Levi Architects", "date": "2026-11-08", "image": "rev_B_aligned.png" }
+  },
+  "types": [
+    { "id": "design",        "label": "Design",        "description": "Physical change: walls, rooms, openings, fixtures" },
+    { "id": "data",          "label": "Data",          "description": "A value changed: area, dimension, label" },
+    { "id": "documentation", "label": "Documentation", "description": "Information added to or removed from the sheet, no physical change" },
+    { "id": "minor",         "label": "Minor",         "description": "Below the significance threshold, or technical. Hidden by default" }
+  ],
+  "changes": [
+    { "id": 1,  "type": "design", "critical": false, "confidence": "high",
+      "title": "Unit layout reworked", "location": "Near label: Unit 83 m²",
+      "before": "Kitchen & living along north facade, master bedroom south-east",
+      "after": "Bedroom moved to north-west corner, kitchen & living relocated east",
+      "box": [0.59, 0.10, 0.91, 0.35] },
+
+    { "id": 2,  "type": "design", "critical": false, "confidence": "high",
+      "title": "Kitchen relocated, island added", "location": "Near label: Unit 69 m²",
+      "before": "Linear kitchen on north wall",
+      "after": "Kitchen on west wall with island",
+      "box": [0.15, 0.10, 0.33, 0.24] },
+
+    { "id": 3,  "type": "design", "critical": false, "confidence": "medium",
+      "title": "Kitchen and bathroom reworked", "location": "Near label: Unit 143 m²",
+      "before": "Kitchen with island; bathroom layout A",
+      "after": "Linear kitchen, no island; bathroom fixtures rearranged",
+      "box": [0.47, 0.53, 0.85, 0.70] },
+
+    { "id": 4,  "type": "design", "critical": false, "confidence": "medium",
+      "title": "Bathroom and bedroom walls shifted", "location": "Near label: Unit 122 m²",
+      "before": "Bathroom between bedrooms 2 and 3",
+      "after": "Bathroom moved, walls of bedrooms 2–3 shifted",
+      "box": [0.15, 0.51, 0.37, 0.64] },
+
+    { "id": 5,  "type": "data", "critical": true, "confidence": "high",
+      "title": "Safe room (Mamad) area reduced", "location": "Near label: Unit 143 m²",
+      "before": "15.08 m²", "after": "9.48 m²",
+      "note": "Safe-room changes may require Home Front Command re-approval.",
+      "box": [0.72, 0.54, 0.91, 0.61] },
+
+    { "id": 6,  "type": "data", "critical": true, "confidence": "high",
+      "title": "Unit area reduced", "location": "Unit label",
+      "before": "147 m²", "after": "143 m²",
+      "box": [0.57, 0.635, 0.69, 0.675] },
+
+    { "id": 7,  "type": "data", "critical": false, "confidence": "high",
+      "title": "Balcony area increased", "location": "Near label: Unit 69 m²",
+      "before": "8.80 m²", "after": "12.80 m²",
+      "box": [0.10, 0.23, 0.16, 0.34] },
+
+    { "id": 8,  "type": "data", "critical": false, "confidence": "high",
+      "title": "Balcony area increased", "location": "Near label: Unit 83 m²",
+      "before": "9.95 m²", "after": "12.50 m²",
+      "box": [0.75, 0.06, 0.95, 0.19] },
+
+    { "id": 9,  "type": "documentation", "critical": false, "confidence": "high",
+      "title": "Dimensions, grid lines and room labels removed", "location": "Whole sheet",
+      "before": "Dimension chains, grid axes 1–8, room names and areas",
+      "after": "Mostly missing",
+      "note": "Rev B may not be sufficient for construction. Check before issuing to site.",
+      "sheetWarning": true,
+      "box": null },
+
+    { "id": 10, "type": "minor", "critical": false, "confidence": "high",
+      "title": "Balcony area recalculated", "location": "South balcony (west)",
+      "before": "16.90 m²", "after": "16.95 m²",
+      "box": [0.31, 0.80, 0.47, 0.87] },
+
+    { "id": 11, "type": "minor", "critical": false, "confidence": "high",
+      "title": "Balcony area recalculated", "location": "South balcony (east)",
+      "before": "17.36 m²", "after": "17.41 m²",
+      "box": [0.47, 0.80, 0.71, 0.87] },
+
+    { "id": 12, "type": "minor", "critical": false, "confidence": "high",
+      "title": "Sheet size and position changed (auto-aligned)", "location": "Whole sheet",
+      "before": "533 × 711 pt", "after": "533 × 749 pt, drawing shifted ~35 pt",
+      "box": null }
+  ]
+}
