@@ -51,7 +51,8 @@
   .num { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 4px;
     border-radius: 4px; background: var(--c, var(--muted)); color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
   .ba { font-size: 13px; margin-top: 4px; }
-  .ba-before { color: var(--muted); }
+  .ba-before { color: var(--red); }
+  .ba-after { color: var(--green); }
   .ba-label { color: var(--muted); font-weight: 500; }
 
   /* ---------- Screen 1: Documents ---------- */
@@ -663,7 +664,7 @@ function typeSummaryHTML(t) {
 }
 
 /* ---------- PDF export: a plain-text PDF built by hand (no library, works offline) ---------- */
-const PDF_TEXT = "0.12 0.16 0.2", PDF_GREY = "0.42 0.46 0.52", PDF_RED = "0.78 0.16 0.16";
+const PDF_TEXT = "0.12 0.16 0.2", PDF_GREY = "0.42 0.46 0.52", PDF_RED = "0.78 0.16 0.16", PDF_GREEN = "0.12 0.48 0.27";
 
 // The summary as lines of text: { text, size, bold, color, indent, space (extra gap above) }
 function summaryLines() {
@@ -678,8 +679,8 @@ function summaryLines() {
   if (!critical.length) add("No critical changes.", { color: PDF_GREY });
   critical.forEach(c => {
     add(`#${c.id} ${c.title} - ${c.location}`, { bold: true, space: 6 });
-    add(`Before: ${c.before}`, { color: PDF_GREY });
-    add(`After: ${c.after}`);
+    add(`Before: ${c.before}`, { color: PDF_RED });
+    add(`After: ${c.after}`, { color: PDF_GREEN });
     if (c.note) add(c.note, { color: PDF_RED });
   });
 
@@ -691,8 +692,8 @@ function summaryLines() {
     items.forEach(c => {
       add(`#${c.id} ${c.title}` + (state.typeOverride[c.id] ? ` (reclassified from ${typeLabel(c.type)})` : ""),
         { indent: 12, space: 4 });
-      add(`Before: ${c.before}`, { indent: 32, color: PDF_GREY });
-      add(`After: ${c.after}`, { indent: 32 });
+      add(`Before: ${c.before}`, { indent: 32, color: PDF_RED });
+      add(`After: ${c.after}`, { indent: 32, color: PDF_GREEN });
     });
   });
   return lines;
