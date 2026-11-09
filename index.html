@@ -110,10 +110,13 @@
   .stage.zoomed .frame { cursor: grab; }
   .stage.zoomed .frame:active { cursor: grabbing; }
   .stage.instant .canvas { transition: none; }
-  .detail-card { position: absolute; top: 44px; right: 24px; z-index: 3; width: 280px; padding: 12px; font-size: 13px;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, .12); }
-  .detail-card .loc, .detail-card .diff { margin: 4px 0 0 28px; }
-  .detail-card .note, .detail-card .tags { margin-left: 28px; }
+  /* Selected change details: a strip between toolbar and drawing, so it never covers the images */
+  .detail-card { padding: 8px 16px; font-size: 13px; background: var(--surface); border-bottom: 1px solid var(--border);
+    border-left: 3px solid var(--accent); }
+  .detail-card .item-title { align-items: center; flex-wrap: wrap; }
+  .detail-card .loc { font-weight: 400; }
+  .detail-card .tags { margin: 0; }
+  .detail-card .diff, .detail-card .note { margin: 2px 0 0 28px; }
   .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .pane-label { padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
   .frame { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e9ecef; touch-action: none; user-select: none; }
@@ -457,7 +460,8 @@ function renderViewer() {
         <span><i class="sw crit"></i>Critical</span>
       </div>
     </div>
-    <div class="stage">${panes}<div class="detail-card" id="detail-card" hidden></div></div>`;
+    <div class="detail-card" id="detail-card" hidden></div>
+    <div class="stage">${panes}</div>`;
   updateViewer(false);
 }
 
@@ -485,11 +489,10 @@ function updateViewer(pulse) {
   const card = document.getElementById("detail-card");
   card.hidden = !sel;
   if (sel) card.innerHTML = `
-    <div class="item-title"><span class="num t-${typeOf(sel)}">${sel.id}</span>${esc(sel.title)}</div>
-    <div class="loc">${esc(sel.location)}</div>
+    <div class="item-title"><span class="num t-${typeOf(sel)}">${sel.id}</span>${esc(sel.title)}
+      <span class="loc">· ${esc(sel.location)}</span>${tagsHTML(sel)}</div>
     <div class="diff"><s>${esc(sel.before)}</s> → <ins>${esc(sel.after)}</ins></div>
-    ${sel.note ? `<div class="note">${esc(sel.note)}</div>` : ""}
-    ${tagsHTML(sel)}`;
+    ${sel.note ? `<div class="note">${esc(sel.note)}</div>` : ""}`;
 
   // One shared view for every frame, so side-by-side panes stay comparable
   const { scale, cx, cy } = state.view;
