@@ -80,6 +80,7 @@
   /* ---------- Screen 2: Compare ---------- */
   .compare { display: flex; flex-direction: column; height: 100%; }
   .topbar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .product { font-size: 12px; font-weight: 600; color: var(--accent); }
   .warning { padding: 8px 16px; background: #fff8db; border-bottom: 1px solid #f0dc8a; color: #5c4a00; font-size: 13px; }
   .warning a { margin-left: 8px; font-weight: 500; }
   .split { flex: 1; min-height: 0; display: grid; grid-template-columns: 360px 1fr; }
@@ -364,7 +365,7 @@ function docRowHTML(revKey, statusTag, changesCell) {
 }
 
 function renderDocuments() {
-  const badge = `<button class="badge accent badge-link" data-action="open-compare">
+  const badge = `<button class="badge accent badge-link" data-action="open-compare" title="Open in RevCompare">
     ${plural(totalCount(), "change")} · ${criticalCount()} critical</button>${reviewStatusHTML()}`;
   app.innerHTML = `
     <div class="page">
@@ -404,7 +405,7 @@ function renderCompare() {
     <div class="compare">
       <div class="topbar">
         <a href="#" data-action="go-documents">← Floor plans</a>
-        <div><b>${s.number} ${s.title}</b> · Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
+        <div><span class="product">RevCompare ·</span> <b>${s.number} ${s.title}</b> · Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
           <span class="muted">· uploaded by ${s.to.uploadedBy}</span></div>
       </div>
       ${warn ? `<div class="warning">⚠ <b>${esc(warn.title)}.</b> ${esc(warn.note)}
