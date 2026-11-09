@@ -62,8 +62,16 @@
     padding: 8px 16px; background: #fafbfc; border-bottom: 1px solid var(--border); }
   .docs td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
   .docs tr:last-child td { border-bottom: none; }
-  .docs tr.clickable { cursor: pointer; }
-  .docs tr.clickable:hover td { background: #f7faff; }
+  .docs td a { font-weight: 600; }
+  .badge, .tag { white-space: nowrap; }
+  .badge-link { border: 0; cursor: pointer; }
+  .badge-link:hover { background: #d6e4f5; }
+  .tag.current { background: #e7f3ec; color: var(--green); }
+
+  /* ---------- Original file viewer ---------- */
+  .original { display: flex; flex-direction: column; height: 100%; }
+  .original-view { flex: 1; min-height: 0; padding: 16px; }
+  .original-view img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .status { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
   .status.done { color: var(--green); font-weight: 500; }
 
@@ -260,12 +268,6 @@ const DATA = {
   ]
 };
 
-// Mock rows for the other sheets in the documents list (no detection data)
-const OTHER_SHEETS = {
-  sitePlan: { number: "A-100", title: "Site Plan", rev: "A", uploadedBy: "Studio Levi Architects", date: "2026-10-12" },
-  sections: { number: "A-201", title: "Sections",  rev: "B", uploadedBy: "Studio Levi Architects", date: "2026-11-08" }
-};
-
 const ROLES = [
   { id: "pm",   label: "Project Manager" },
   { id: "dc",   label: "Design Coordinator" },
@@ -276,7 +278,8 @@ const ROLES = [
    STATE — everything lives in memory
    ===================================================================== */
 const state = {
-  screen: "documents",          // "documents" | "compare" | "summary"
+  screen: "documents",          // "documents" | "original" | "compare" | "summary"
+  originalRev: "to",            // which revision the original-file viewer shows: "from" | "to"
   role: "pm",
   reviewed: Object.fromEntries(ROLES.map(r => [r.id, new Set()])),  // role id -> Set of change ids
   typeOverride: {},             // change id -> type id (reviewer reclassifications)
@@ -321,6 +324,7 @@ const reviewedCount = () => DATA.changes.filter(isReviewed).length;
 function render() {
   document.getElementById("role").value = state.role;
   if (state.screen === "documents") renderDocuments();
+  if (state.screen === "original") renderOriginal();
   if (state.screen === "compare") renderCompare();
   if (state.screen === "summary") renderSummary();
 }
@@ -332,27 +336,43 @@ function reviewStatusHTML() {
   return `<span class="status">${x} of ${n} reviewed by you</span>`;
 }
 
-function docRowHTML(doc, changesCell, clickable) {
-  return `<tr ${clickable ? 'class="clickable" data-action="open-compare"' : ""}>
-    <td><b>${doc.number}</b></td><td>${doc.title}</td><td>Rev ${doc.rev}</td>
-    <td>${doc.uploadedBy}</td><td>${fmtDate(doc.date)}</td><td>${changesCell}</td></tr>`;
+// One row per revision. The Name opens the original file; only the changes badge opens the compare view.
+function docRowHTML(revKey, statusTag, changesCell) {
+  const s = DATA.sheet, rev = s[revKey];
+  return `<tr>
+    <td><a href="#" data-action="open-original" data-rev="${revKey}">${s.number} ${s.title}</a></td>
+    <td>Rev ${rev.rev}</td><td>${statusTag}</td>
+    <td>${rev.uploadedBy}</td><td>${fmtDate(rev.date)}</td><td>${changesCell}</td></tr>`;
 }
 
 function renderDocuments() {
-  const s = DATA.sheet;
-  const a101 = { number: s.number, title: s.title, rev: s.to.rev, uploadedBy: s.to.uploadedBy, date: s.to.date };
-  const badge = `<span class="badge accent">${plural(totalCount(), "change")} · ${criticalCount()} critical</span>${reviewStatusHTML()}`;
+  const badge = `<button class="badge accent badge-link" data-action="open-compare">
+    ${plural(totalCount(), "change")} · ${criticalCount()} critical</button>${reviewStatusHTML()}`;
   app.innerHTML = `
     <div class="page">
       <h1>Floor plans</h1>
       <div class="table-card"><table class="docs">
-        <thead><tr><th>Sheet</th><th>Title</th><th>Current rev</th><th>Uploaded by</th><th>Date</th><th>Changes</th></tr></thead>
+        <thead><tr><th>Name</th><th>Rev</th><th>Status</th><th>Uploaded by</th><th>Date</th><th>Changes vs. previous rev</th></tr></thead>
         <tbody>
-          ${docRowHTML(OTHER_SHEETS.sitePlan, '<span class="muted">—</span>', false)}
-          ${docRowHTML(a101, badge, true)}
-          ${docRowHTML(OTHER_SHEETS.sections, '<span class="badge">No changes detected</span>', false)}
+          ${docRowHTML("to", `<span class="tag current">Current</span>`, badge)}
+          ${docRowHTML("from", `<span class="tag">Superseded</span>`, `<span class="muted">Initial upload</span>`)}
         </tbody>
       </table></div>
+    </div>`;
+}
+
+/* =====================================================================
+   RENDER: original file (one revision on its own, no change markup)
+   ===================================================================== */
+function renderOriginal() {
+  const s = DATA.sheet, rev = s[state.originalRev];
+  app.innerHTML = `
+    <div class="original">
+      <div class="topbar">
+        <a href="#" data-action="go-documents">← Floor plans</a>
+        <b>${s.number} · Rev ${rev.rev} · Original file</b>
+      </div>
+      <div class="original-view"><img src="${rev.image}" alt="${s.number} Rev ${rev.rev}"></div>
     </div>`;
 }
 
@@ -365,7 +385,7 @@ function renderCompare() {
   app.innerHTML = `
     <div class="compare">
       <div class="topbar">
-        <a href="#" data-action="go-documents">← Documents</a>
+        <a href="#" data-action="go-documents">← Floor plans</a>
         <div><b>${s.number} ${s.title}</b> · Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
           <span class="muted">· uploaded by ${s.to.uploadedBy}</span></div>
       </div>
@@ -793,6 +813,7 @@ document.addEventListener("click", e => {
   switch (el.dataset.action) {
     case "open-compare": openCompare(); break;
     case "go-documents": goTo("documents"); break;
+    case "open-original": state.originalRev = el.dataset.rev; goTo("original"); break;
     case "select":
       if (e.target.closest("label, select")) break;   // checkbox / type menu inside an item
       selectChange(id, el.classList.contains("item") ? "list" : el.classList.contains("box") ? "drawing" : undefined);
