@@ -7,7 +7,7 @@
 <style>
   /* ---------- Base ---------- */
   :root {
-    --bg: #f3f4f6; --surface: #fff; --border: #dfe3e8; --text: #1f2933; --muted: #6b7684;
+    --bg: #f3f4f6; --surface: #fff; --border: #dfe3e8; --text: #1f2933; --muted: #5f6a78;
     --accent: #1f5fa8; --accent-soft: #e8f0fa; --red: #c62828; --green: #1e7b45;
     --amber: #9a5800; --amber-soft: #fff3dc;
     --design: #1f5fa8; --data: #7b3fb0; --documentation: #0f8577; --minor: #8792a0;
@@ -38,6 +38,7 @@
   .btn:hover { background: #f5f7f9; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef0f3; color: var(--muted); font-size: 12px; font-weight: 500; }
   .badge.accent { background: var(--accent-soft); color: var(--accent); }
   .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #eef0f3; color: var(--muted); }
@@ -66,7 +67,8 @@
   .docs tr:last-child td { border-bottom: none; }
   .docs td a { font-weight: 600; }
   .badge, .tag { white-space: nowrap; }
-  .badge-link { border: 0; cursor: pointer; }
+  .badge-link { border: 0; cursor: pointer; padding: 4px 10px; }
+  .docs td a { display: inline-block; padding-block: 4px; }
   .badge-link:hover { background: #d6e4f5; }
   .tag.current { background: #e7f3ec; color: var(--green); }
 
@@ -94,14 +96,16 @@
   .item { padding: 12px 16px; border-bottom: 1px solid var(--border); border-left: 3px solid transparent; cursor: pointer; scroll-margin-top: 40px; }
   .item:hover { background: #f9fafb; }
   .item.selected { background: var(--accent-soft); border-left-color: var(--accent); }
-  .item.done .item-body { opacity: .55; }
+  /* Reviewed: the title goes grey (still 4.5:1+); everything else keeps full contrast */
+  .item.done .item-title { color: var(--muted); font-weight: 500; }
   .item-title { display: flex; gap: 8px; font-weight: 600; }
+  .item-select { width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
   .item-sub { margin-left: 28px; }
   .loc { font-size: 12px; color: var(--muted); }
   .tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .controls { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 0 28px; }
-  .retype { width: 72px; font-size: 12px; padding: 2px 4px; color: var(--muted); cursor: pointer; }
-  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  .retype { width: 72px; min-height: 24px; font-size: 12px; padding: 2px 4px; color: var(--muted); cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 13px; cursor: pointer; }
   .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 
   .viewer { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -117,7 +121,8 @@
   .zoom button { width: 32px; padding: 5px 0; font-weight: 600; }
   .zoom span { min-width: 48px; text-align: center; font-size: 13px; color: var(--muted); border-right: 1px solid var(--border); }
   .stage { position: relative; flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
-  .stage.zoomed .frame { cursor: grab; }
+  /* At 100% a vertical swipe scrolls the page (pan-y); once zoomed, all gestures pan/zoom the drawing */
+  .stage.zoomed .frame { cursor: grab; touch-action: none; }
   .stage.zoomed .frame:active { cursor: grabbing; }
   .stage.instant .canvas { transition: none; }
   /* Selected change details: a strip between toolbar and drawing, so it never covers the images */
@@ -129,7 +134,7 @@
   .detail-card .ba, .detail-card .note { margin: 2px 0 0 28px; }
   .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .pane-label { padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
-  .frame { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e9ecef; touch-action: none; user-select: none; }
+  .frame { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e9ecef; touch-action: pan-y; user-select: none; }
   .canvas { --s: 1; position: absolute; left: 0; top: 0; background: #fff; transform-origin: 0 0; transition: transform .45s ease; }
   .stage.loading .canvas { background: #dde1e6; }
   .stage.loading img, .stage.loading .box { visibility: hidden; }
@@ -163,6 +168,18 @@
   .note { font-size: 13px; color: var(--red); margin-top: 4px; }
   .compact { list-style: none; margin: 0; padding: 0; }
   .compact li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; }
+
+  /* ---------- Phones and touch screens: tap targets at least 44px ---------- */
+  @media (max-width: 700px), (pointer: coarse) {
+    .btn, .seg button, .badge-link, .retype, #role, .group-head, .check, .docs td a, .topbar a { min-height: 44px; }
+    .badge-link, .docs td a, .topbar a { display: inline-flex; align-items: center; }
+    .badge-link { padding: 0 14px; font-size: 13px; }
+    .seg button { padding: 0 14px; }
+    .zoom button { width: 44px; }
+    .retype { width: auto; min-width: 96px; font-size: 13px; }
+    .check { padding-left: 12px; font-size: 14px; }
+    .check input { width: 20px; height: 20px; }
+  }
 
   /* ---------- Smaller screens: narrower list, then stack below 700px ---------- */
   @media (max-width: 1100px) {
@@ -423,6 +440,12 @@ function renderCompare() {
 
 /* ---------- Change list ---------- */
 function renderList() {
+  // Remember which control had keyboard focus, so it keeps focus after the list is redrawn
+  const active = document.activeElement;
+  const focusKey = active && active.closest("#list") && active.dataset.action
+    ? `${active.tagName.toLowerCase()}[data-action="${active.dataset.action}"]` + (active.dataset.id ? `[data-id="${active.dataset.id}"]` : `[data-type="${active.dataset.type}"]`)
+    : null;
+
   document.getElementById("list").innerHTML = DATA.types.map(t => {
     const items = changesOfType(t.id);
     const open = !state.collapsed[t.id];
@@ -436,6 +459,8 @@ function renderList() {
         ${open ? items.map(itemHTML).join("") : ""}
       </div>`;
   }).join("");
+
+  if (focusKey) document.querySelector("#list " + focusKey)?.focus({ preventScroll: true });
 }
 
 function itemHTML(c) {
@@ -444,7 +469,8 @@ function itemHTML(c) {
   return `
     <div class="item ${c.id === state.selectedId ? "selected" : ""} ${done ? "done" : ""}" id="item-${c.id}" data-action="select" data-id="${c.id}">
       <div class="item-body">
-        <div class="item-title"><span class="num t-${typeOf(c)}">${c.id}</span>${esc(c.title)}</div>
+        <button class="item-title item-select" data-action="select" data-id="${c.id}"
+          aria-pressed="${c.id === state.selectedId}"><span class="num t-${typeOf(c)}">${c.id}</span>${esc(c.title)}</button>
         <div class="item-sub">
           <div class="loc">${esc(c.location)}</div>
           ${beforeAfterHTML(c)}
@@ -894,7 +920,7 @@ document.addEventListener("click", e => {
     case "open-original": state.originalRev = el.dataset.rev; goTo("original"); break;
     case "select":
       if (e.target.closest("label, select")) break;   // checkbox / type menu inside an item
-      selectChange(id, el.classList.contains("item") ? "list" : el.classList.contains("box") ? "drawing" : undefined);
+      selectChange(id, el.closest(".item") ? "list" : el.classList.contains("box") ? "drawing" : undefined);
       break;
     case "toggle-group": toggleGroup(el.dataset.type); break;
     case "mode": state.viewMode = el.dataset.mode; renderViewer(); break;
@@ -938,15 +964,38 @@ document.addEventListener("wheel", e => {
   wheelTimer = setTimeout(() => setInstant(false), 150);
 }, { passive: false });
 
-// Drag the drawing to pan when zoomed in
+// Drag the drawing to pan when zoomed in; on touch screens, two fingers pinch to zoom
 let drag = null, justPanned = false;
+const pointers = new Map();   // pointers currently down on the drawing: id -> {x, y}
+let pinch = null;             // { frame, dist, moved } while two fingers are down
+
+const pointerPair = () => [...pointers.values()];
+const pairDistance = ([a, b]) => Math.hypot(a.x - b.x, a.y - b.y);
+
 document.addEventListener("pointerdown", e => {
   const frame = e.target.closest(".frame");
-  if (!frame || e.button !== 0 || state.view.scale <= 1) return;
+  if (!frame || e.button !== 0) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {              // second finger: switch from dragging to pinching
+    pinch = { frame, dist: pairDistance(pointerPair()), moved: false };
+    drag = null;
+    return;
+  }
+  if (state.view.scale <= 1) return;      // at 100% a one-finger swipe scrolls the page instead
   const { w, h } = frameFit(frame);
   drag = { x: e.clientX, y: e.clientY, cx: state.view.cx, cy: state.view.cy, w, h, moved: false };
 });
 document.addEventListener("pointermove", e => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && pointers.size === 2) {
+    const pair = pointerPair(), dist = pairDistance(pair);
+    if (!pinch.dist) return;
+    setInstant(true);
+    zoomBy(dist / pinch.dist, { frame: pinch.frame, x: (pair[0].x + pair[1].x) / 2, y: (pair[0].y + pair[1].y) / 2 });
+    pinch.dist = dist;
+    pinch.moved = true;
+    return;
+  }
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (!drag.moved && Math.hypot(dx, dy) < 4) return;   // small moves are still clicks
@@ -957,14 +1006,18 @@ document.addEventListener("pointermove", e => {
   state.view.cy = clamp(drag.cy - dy / (s * drag.h), 0, 1);
   updateViewer(false);
 });
-document.addEventListener("pointerup", () => {
-  if (drag && drag.moved) {
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if ((drag && drag.moved) || (pinch && pinch.moved)) {
     justPanned = true;
     setTimeout(() => (justPanned = false), 0);
   }
+  if (pointers.size < 2) pinch = null;
   drag = null;
   setInstant(false);
-});
+}
+document.addEventListener("pointerup", endPointer);
+document.addEventListener("pointercancel", endPointer);   // the browser took over (e.g. page scroll)
 
 window.addEventListener("resize", () => {
   if (state.screen === "compare") updateViewer(false);
