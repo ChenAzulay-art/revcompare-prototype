@@ -158,7 +158,7 @@
     .compare { height: auto; }
     .split { display: block; }
     .list { border-right: 0; }
-    .viewer { height: 70vh; }
+    .viewer { height: calc(100vh - 110px); }   /* fills the screen between header and bottom bar */
     .legend { margin-left: 0; }
   }
 
@@ -627,8 +627,9 @@ function openCompare() {
   goTo("compare");
 }
 
-// Select a change: expand its group, highlight it in the list and zoom to it on the drawing
-function selectChange(id) {
+// Select a change: expand its group, highlight it in the list and zoom to it on the drawing.
+// source: "list" (clicked an item), "drawing" (clicked a box) or undefined (banner, Next unreviewed)
+function selectChange(id, source) {
   const c = findChange(id);
   if (!c) return;
   state.selectedId = id;
@@ -636,7 +637,20 @@ function selectChange(id) {
   zoomToChange(c);
   renderList();
   updateViewer(true);
-  document.getElementById("item-" + id).scrollIntoView({ block: "nearest", behavior: "smooth" });
+  const item = document.getElementById("item-" + id);
+  if (source === "list") document.getElementById("viewer").scrollIntoView({ block: "start", behavior: "smooth" });
+  else if (source === "drawing") scrollListTo(item);
+  else item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+// Scroll only inside the list panel (never the page), so clicking a box keeps the drawing in view
+function scrollListTo(item) {
+  const list = document.getElementById("list");
+  const l = list.getBoundingClientRect(), r = item.getBoundingClientRect();
+  const headerH = 40;   // sticky group header
+  if (r.top < l.top + headerH || r.bottom > l.bottom) {
+    list.scrollBy({ top: r.top - l.top - headerH, behavior: "smooth" });
+  }
 }
 
 function nextUnreviewed() {
@@ -677,7 +691,10 @@ document.addEventListener("click", e => {
   switch (el.dataset.action) {
     case "open-compare": openCompare(); break;
     case "go-documents": goTo("documents"); break;
-    case "select": if (!e.target.closest("label, select")) selectChange(id); break;
+    case "select":
+      if (e.target.closest("label, select")) break;   // checkbox / type menu inside an item
+      selectChange(id, el.classList.contains("item") ? "list" : el.classList.contains("box") ? "drawing" : undefined);
+      break;
     case "toggle-group": toggleGroup(el.dataset.type); break;
     case "mode": state.viewMode = el.dataset.mode; renderViewer(); break;
     case "fit": state.view = fitView(); updateViewer(false); break;
