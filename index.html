@@ -103,11 +103,20 @@
   .opacity { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
   .legend { display: flex; gap: 12px; margin-left: auto; font-size: 12px; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
-  .info { padding: 8px 16px; background: var(--accent-soft); border-bottom: 1px solid var(--border); font-size: 13px; }
-  .stage { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
+  .zoom { align-items: center; }
+  .zoom button { width: 32px; padding: 5px 0; font-weight: 600; }
+  .zoom span { min-width: 48px; text-align: center; font-size: 13px; color: var(--muted); border-right: 1px solid var(--border); }
+  .stage { position: relative; flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
+  .stage.zoomed .frame { cursor: grab; }
+  .stage.zoomed .frame:active { cursor: grabbing; }
+  .stage.instant .canvas { transition: none; }
+  .detail-card { position: absolute; top: 44px; right: 24px; z-index: 3; width: 280px; padding: 12px; font-size: 13px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, .12); }
+  .detail-card .loc, .detail-card .diff { margin: 4px 0 0 28px; }
+  .detail-card .note, .detail-card .tags { margin-left: 28px; }
   .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .pane-label { padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
-  .frame { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e9ecef; }
+  .frame { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e9ecef; touch-action: none; user-select: none; }
   .canvas { --s: 1; position: absolute; left: 0; top: 0; background: #fff; transform-origin: 0 0; transition: transform .45s ease; }
   .canvas img { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
   /* Box borders are divided by the zoom factor (--s) so they keep a constant on-screen width */
@@ -138,8 +147,11 @@
   .compact { list-style: none; margin: 0; padding: 0; }
   .compact li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; }
 
-  /* ---------- Narrow screens: stack list and viewer ---------- */
-  @media (max-width: 900px) {
+  /* ---------- Smaller screens: narrower list, then stack below 700px ---------- */
+  @media (max-width: 1100px) {
+    .split { grid-template-columns: 300px 1fr; }
+  }
+  @media (max-width: 700px) {
     .compare { height: auto; }
     .split { display: block; }
     .list { border-right: 0; }
@@ -267,12 +279,13 @@ const state = {
   typeOverride: {},             // change id -> type id (reviewer reclassifications)
   collapsed: { minor: true },   // type id -> true when its group is collapsed
   selectedId: null,
-  zoomed: false,                // true = zoomed to the selected change's box
+  view: { scale: 1, cx: 0.5, cy: 0.5 },  // zoom level + image point (fractions) shown at the frame centre
   viewMode: "b",                // "side" | "overlay" | "b"
   opacity: 50                   // Rev B opacity in overlay mode (%)
 };
 
 let imgRatio = 1;               // image height / width, read once the image loads
+const MAX_ZOOM = 8;             // manual zoom limit (auto-zoom to a change stops at 4)
 
 /* ---------- Helpers: every count is computed from DATA ---------- */
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -285,6 +298,8 @@ function fmtDate(value) {
 const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const fitView = () => ({ scale: 1, cx: 0.5, cy: 0.5 });
 
 const findChange = id => DATA.changes.find(c => c.id === id);
 const typeOf = c => state.typeOverride[c.id] || c.type;
@@ -391,10 +406,7 @@ function itemHTML(c) {
         <div class="item-sub">
           <div class="loc">${esc(c.location)}</div>
           <div class="diff"><s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></div>
-          <div class="tags">
-            ${c.critical ? `<span class="tag crit">Critical</span>` : ""}
-            <span class="tag conf-${c.confidence}">${cap(c.confidence)} confidence</span>
-          </div>
+          ${tagsHTML(c)}
         </div>
       </div>
       <div class="controls">
@@ -405,6 +417,13 @@ function itemHTML(c) {
         <label class="check"><input type="checkbox" data-action="review" data-id="${c.id}" ${done ? "checked" : ""}> Mark reviewed</label>
       </div>
     </div>`;
+}
+
+function tagsHTML(c) {
+  return `<div class="tags">
+    ${c.critical ? `<span class="tag crit">Critical</span>` : ""}
+    <span class="tag conf-${c.confidence}">${cap(c.confidence)} confidence</span>
+  </div>`;
 }
 
 /* ---------- Drawing viewer ---------- */
@@ -427,14 +446,18 @@ function renderViewer() {
         `<button data-action="mode" data-mode="${id}" class="${state.viewMode === id ? "on" : ""}">${label}</button>`).join("")}</div>
       ${state.viewMode === "overlay" ? `<label class="opacity">Rev ${s.to.rev} opacity
         <input type="range" min="0" max="100" value="${state.opacity}" data-action="opacity"></label>` : ""}
+      <div class="seg zoom">
+        <button data-action="zoom-out" title="Zoom out">−</button>
+        <span id="zoom-level">100%</span>
+        <button data-action="zoom-in" title="Zoom in">+</button>
+      </div>
       <button class="btn" data-action="fit">Fit to sheet</button>
       <div class="legend">
         ${DATA.types.map(t => `<span><i class="sw t-${t.id}"></i>${t.label}</span>`).join("")}
         <span><i class="sw crit"></i>Critical</span>
       </div>
     </div>
-    <div class="info" id="info" hidden></div>
-    <div class="stage">${panes}</div>`;
+    <div class="stage">${panes}<div class="detail-card" id="detail-card" hidden></div></div>`;
   updateViewer(false);
 }
 
@@ -458,31 +481,67 @@ function updateViewer(pulse) {
     el.hidden = !!state.collapsed[typeOf(c)];
   });
 
-  // Whole-sheet changes (box: null) show their details above the drawing
-  const info = document.getElementById("info");
-  info.hidden = !(sel && !sel.box);
-  if (sel && !sel.box) info.innerHTML = `<b>#${sel.id} ${esc(sel.title)}</b> · whole-sheet change ·
-    <span class="diff"><s>${esc(sel.before)}</s> → <ins>${esc(sel.after)}</ins></span>${sel.note ? ` · ${esc(sel.note)}` : ""}`;
+  // Details of the selected change, pinned on the drawing
+  const card = document.getElementById("detail-card");
+  card.hidden = !sel;
+  if (sel) card.innerHTML = `
+    <div class="item-title"><span class="num t-${typeOf(sel)}">${sel.id}</span>${esc(sel.title)}</div>
+    <div class="loc">${esc(sel.location)}</div>
+    <div class="diff"><s>${esc(sel.before)}</s> → <ins>${esc(sel.after)}</ins></div>
+    ${sel.note ? `<div class="note">${esc(sel.note)}</div>` : ""}
+    ${tagsHTML(sel)}`;
 
-  // Same zoom for every frame, so side-by-side panes stay comparable
+  // One shared view for every frame, so side-by-side panes stay comparable
+  const { scale, cx, cy } = state.view;
   document.querySelectorAll(".frame").forEach(frame => {
-    const fw = frame.clientWidth, fh = frame.clientHeight;
-    const w = Math.min(fw, fh / imgRatio), h = w * imgRatio;   // image fitted to the frame
-    let scale = 1, tx = (fw - w) / 2, ty = (fh - h) / 2;
-    if (state.zoomed && sel && sel.box) {
-      const [x0, y0, x1, y1] = sel.box;
-      scale = Math.max(1, Math.min(0.6 * fw / ((x1 - x0) * w), 0.6 * fh / ((y1 - y0) * h), 4));
-      tx = fw / 2 - scale * w * (x0 + x1) / 2;
-      ty = fh / 2 - scale * h * (y0 + y1) / 2;
-    }
+    const { fw, fh, w, h } = frameFit(frame);
     const canvas = frame.querySelector(".canvas");
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
     canvas.style.setProperty("--s", scale);
-    canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    canvas.style.transform = `translate(${fw / 2 - scale * w * cx}px, ${fh / 2 - scale * h * cy}px) scale(${scale})`;
   });
+  document.querySelector(".stage").classList.toggle("zoomed", scale > 1);
+  document.getElementById("zoom-level").textContent = Math.round(scale * 100) + "%";
 
   if (pulse) document.querySelectorAll(".box.selected").forEach(el => el.classList.add("pulse"));
+}
+
+// Size of the frame and of the image fitted inside it (at 100%)
+function frameFit(frame) {
+  const fw = frame.clientWidth, fh = frame.clientHeight;
+  const w = Math.min(fw, fh / imgRatio);
+  return { fw, fh, w, h: w * imgRatio };
+}
+
+// Centre the view on a change's box; whole-sheet changes reset to fit
+function zoomToChange(c) {
+  if (!c.box) return (state.view = fitView());
+  const { fw, fh, w, h } = frameFit(document.querySelector(".frame"));
+  const [x0, y0, x1, y1] = c.box;
+  const scale = clamp(Math.min(0.6 * fw / ((x1 - x0) * w), 0.6 * fh / ((y1 - y0) * h)), 1, 4);
+  state.view = { scale, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+}
+
+// Manual zoom. With an anchor (wheel), the image point under the cursor stays put.
+function zoomBy(factor, anchor) {
+  const v = state.view;
+  const scale = clamp(v.scale * factor, 1, MAX_ZOOM);
+  let { cx, cy } = v;
+  if (anchor) {
+    const { fw, fh, w, h } = frameFit(anchor.frame);
+    const r = anchor.frame.getBoundingClientRect();
+    const mx = anchor.x - r.left - fw / 2, my = anchor.y - r.top - fh / 2;   // cursor offset from frame centre
+    cx += mx / (v.scale * w) - mx / (scale * w);
+    cy += my / (v.scale * h) - my / (scale * h);
+  }
+  state.view = scale === 1 ? fitView() : { scale, cx: clamp(cx, 0, 1), cy: clamp(cy, 0, 1) };
+  updateViewer(false);
+}
+
+// Turn off the zoom animation while wheeling / dragging, so it follows the hand
+function setInstant(on) {
+  document.querySelector(".stage")?.classList.toggle("instant", on);
 }
 
 /* ---------- Bottom bar ---------- */
@@ -561,7 +620,7 @@ function goTo(screen) {
 
 function openCompare() {
   state.selectedId = null;
-  state.zoomed = false;
+  state.view = fitView();
   goTo("compare");
 }
 
@@ -570,8 +629,8 @@ function selectChange(id) {
   const c = findChange(id);
   if (!c) return;
   state.selectedId = id;
-  state.zoomed = true;
   state.collapsed[typeOf(c)] = false;
+  zoomToChange(c);
   renderList();
   updateViewer(true);
   document.getElementById("item-" + id).scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -609,7 +668,7 @@ function toggleGroup(typeId) {
 
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-action]");
-  if (!el) return;
+  if (!el || justPanned) return;   // the click that ends a drag is not a selection
   if (el.tagName === "A") e.preventDefault();
   const id = Number(el.dataset.id);
   switch (el.dataset.action) {
@@ -618,7 +677,9 @@ document.addEventListener("click", e => {
     case "select": if (!e.target.closest("label, select")) selectChange(id); break;
     case "toggle-group": toggleGroup(el.dataset.type); break;
     case "mode": state.viewMode = el.dataset.mode; renderViewer(); break;
-    case "fit": state.zoomed = false; updateViewer(false); break;
+    case "fit": state.view = fitView(); updateViewer(false); break;
+    case "zoom-in": zoomBy(1.5); break;
+    case "zoom-out": zoomBy(1 / 1.5); break;
     case "next": nextUnreviewed(); break;
     case "finish": goTo("summary"); break;
     case "print": window.print(); break;
@@ -642,6 +703,46 @@ document.addEventListener("input", e => {
   if (e.target.dataset.action !== "opacity") return;
   state.opacity = Number(e.target.value);
   document.querySelector(".canvas img.top").style.opacity = state.opacity / 100;
+});
+
+// Mouse wheel / trackpad pinch on the drawing zooms toward the cursor
+let wheelTimer;
+document.addEventListener("wheel", e => {
+  const frame = e.target.closest(".frame");
+  if (!frame) return;
+  e.preventDefault();
+  setInstant(true);
+  zoomBy(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002)), { frame, x: e.clientX, y: e.clientY });
+  clearTimeout(wheelTimer);
+  wheelTimer = setTimeout(() => setInstant(false), 150);
+}, { passive: false });
+
+// Drag the drawing to pan when zoomed in
+let drag = null, justPanned = false;
+document.addEventListener("pointerdown", e => {
+  const frame = e.target.closest(".frame");
+  if (!frame || e.button !== 0 || state.view.scale <= 1) return;
+  const { w, h } = frameFit(frame);
+  drag = { x: e.clientX, y: e.clientY, cx: state.view.cx, cy: state.view.cy, w, h, moved: false };
+});
+document.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;   // small moves are still clicks
+  drag.moved = true;
+  setInstant(true);
+  const s = state.view.scale;
+  state.view.cx = clamp(drag.cx - dx / (s * drag.w), 0, 1);
+  state.view.cy = clamp(drag.cy - dy / (s * drag.h), 0, 1);
+  updateViewer(false);
+});
+document.addEventListener("pointerup", () => {
+  if (drag && drag.moved) {
+    justPanned = true;
+    setTimeout(() => (justPanned = false), 0);
+  }
+  drag = null;
+  setInstant(false);
 });
 
 window.addEventListener("resize", () => {
