@@ -50,8 +50,9 @@
   .sw.crit { --c: var(--red); border-width: 3px; }
   .num { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 4px;
     border-radius: 4px; background: var(--c, var(--muted)); color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-  .diff s { color: var(--red); }
-  .diff ins { color: var(--accent); text-decoration: none; }
+  .ba { font-size: 13px; margin-top: 4px; }
+  .ba-before { color: var(--muted); }
+  .ba-label { color: var(--muted); font-weight: 500; }
 
   /* ---------- Screen 1: Documents ---------- */
   .page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
@@ -95,7 +96,6 @@
   .item-title { display: flex; gap: 8px; font-weight: 600; }
   .item-sub { margin-left: 28px; }
   .loc { font-size: 12px; color: var(--muted); }
-  .item .diff { font-size: 13px; margin-top: 4px; }
   .tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .controls { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 0 28px; }
   .retype { width: 72px; font-size: 12px; padding: 2px 4px; color: var(--muted); cursor: pointer; }
@@ -124,11 +124,13 @@
   .detail-card .item-title { align-items: center; flex-wrap: wrap; }
   .detail-card .loc { font-weight: 400; }
   .detail-card .tags { margin: 0; }
-  .detail-card .diff, .detail-card .note { margin: 2px 0 0 28px; }
+  .detail-card .ba, .detail-card .note { margin: 2px 0 0 28px; }
   .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .pane-label { padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
   .frame { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e9ecef; touch-action: none; user-select: none; }
   .canvas { --s: 1; position: absolute; left: 0; top: 0; background: #fff; transform-origin: 0 0; transition: transform .45s ease; }
+  .stage.loading .canvas { background: #dde1e6; }
+  .stage.loading img, .stage.loading .box { visibility: hidden; }
   .canvas img { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
   /* Box borders are divided by the zoom factor (--s) so they keep a constant on-screen width */
   .box { position: absolute; border: calc(2px / var(--s)) solid var(--c, var(--accent)); border-radius: calc(3px / var(--s)); cursor: pointer; }
@@ -286,11 +288,11 @@ const state = {
   collapsed: { minor: true },   // type id -> true when its group is collapsed
   selectedId: null,
   view: { scale: 1, cx: 0.5, cy: 0.5 },  // zoom level + image point (fractions) shown at the frame centre
-  viewMode: "b",                // "side" | "overlay" | "b"
+  viewMode: "side",             // "side" | "overlay" | "b"
   opacity: 50                   // Rev B opacity in overlay mode (%)
 };
 
-let imgRatio = 1;               // image height / width, read once the image loads
+let imgRatio = Math.SQRT2;      // image height / width: A-series sheet proportion until the image loads
 const MAX_ZOOM = 8;             // manual zoom limit (auto-zoom to a change stops at 4)
 
 /* ---------- Helpers: every count is computed from DATA ---------- */
@@ -428,7 +430,7 @@ function itemHTML(c) {
         <div class="item-title"><span class="num t-${typeOf(c)}">${c.id}</span>${esc(c.title)}</div>
         <div class="item-sub">
           <div class="loc">${esc(c.location)}</div>
-          <div class="diff"><s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></div>
+          ${beforeAfterHTML(c)}
           ${tagsHTML(c)}
         </div>
       </div>
@@ -440,6 +442,14 @@ function itemHTML(c) {
         <label class="check"><input type="checkbox" data-action="review" data-id="${c.id}" ${done ? "checked" : ""}> Mark reviewed</label>
       </div>
     </div>`;
+}
+
+// Before / After as two short lines (used in the list, the details strip and the summary)
+function beforeAfterHTML(c) {
+  return `<div class="ba">
+    <div class="ba-before"><span class="ba-label">Before:</span> ${esc(c.before)}</div>
+    <div class="ba-after"><span class="ba-label">After:</span> ${esc(c.after)}</div>
+  </div>`;
 }
 
 function tagsHTML(c) {
@@ -481,8 +491,9 @@ function renderViewer() {
       </div>
     </div>
     <div class="detail-card" id="detail-card" hidden></div>
-    <div class="stage">${panes}</div>`;
+    <div class="stage loading">${panes}</div>`;
   updateViewer(false);
+  watchImageLoading();
 }
 
 function paneHTML(label, images) {
@@ -493,6 +504,21 @@ function paneHTML(label, images) {
   }).join("");
   return `<div class="pane"><div class="pane-label">${label}</div>
     <div class="frame"><div class="canvas">${images}${boxes}</div></div></div>`;
+}
+
+// The drawing stays a grey placeholder (no boxes, no zoom) until every image in it has loaded,
+// so side-by-side panes appear and zoom together
+function watchImageLoading() {
+  const stage = document.querySelector(".stage");
+  const imgs = [...stage.querySelectorAll("img")];
+  const check = () => {
+    if (!stage.classList.contains("loading") || !imgs.every(img => img.complete && img.naturalWidth)) return;
+    imgRatio = imgs[0].naturalHeight / imgs[0].naturalWidth;
+    stage.classList.remove("loading");
+    updateViewer(false);
+  };
+  imgs.forEach(img => img.addEventListener("load", check));
+  check();   // already cached
 }
 
 // Updates boxes, info strip and zoom on the existing DOM (so the zoom can animate)
@@ -511,11 +537,13 @@ function updateViewer(pulse) {
   if (sel) card.innerHTML = `
     <div class="item-title"><span class="num t-${typeOf(sel)}">${sel.id}</span>${esc(sel.title)}
       <span class="loc">· ${esc(sel.location)}</span>${tagsHTML(sel)}</div>
-    <div class="diff"><s>${esc(sel.before)}</s> → <ins>${esc(sel.after)}</ins></div>
+    ${beforeAfterHTML(sel)}
     ${sel.note ? `<div class="note">${esc(sel.note)}</div>` : ""}`;
 
   // One shared view for every frame, so side-by-side panes stay comparable
-  const { scale, cx, cy } = state.view;
+  // While the images load, show the placeholder at fit; the zoom animates in once they're loaded
+  const stage = document.querySelector(".stage");
+  const { scale, cx, cy } = stage.classList.contains("loading") ? fitView() : state.view;
   document.querySelectorAll(".frame").forEach(frame => {
     const { fw, fh, w, h } = frameFit(frame);
     const canvas = frame.querySelector(".canvas");
@@ -615,7 +643,7 @@ function criticalHTML(c) {
   return `
     <div class="sum-crit">
       <div><span class="num t-${typeOf(c)}">${c.id}</span> <b>${esc(c.title)}</b> <span class="muted">· ${esc(c.location)}</span></div>
-      <div class="diff"><s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></div>
+      ${beforeAfterHTML(c)}
       ${c.note ? `<div class="note">${esc(c.note)}</div>` : ""}
     </div>`;
 }
@@ -627,8 +655,9 @@ function typeSummaryHTML(t) {
     <ul class="compact">
       ${items.length ? items.map(c => `
         <li><span class="num t-${t.id}">${c.id}</span>
-          <span>${esc(c.title)} <span class="muted diff">— <s>${esc(c.before)}</s> → <ins>${esc(c.after)}</ins></span>
-          ${state.typeOverride[c.id] ? `<span class="tag">reclassified from ${typeLabel(c.type)}</span>` : ""}</span></li>`).join("")
+          <div>${esc(c.title)}
+            ${state.typeOverride[c.id] ? `<span class="tag">reclassified from ${typeLabel(c.type)}</span>` : ""}
+            ${beforeAfterHTML(c)}</div></li>`).join("")
         : `<li class="muted">None</li>`}
     </ul>`;
 }
@@ -649,7 +678,8 @@ function summaryLines() {
   if (!critical.length) add("No critical changes.", { color: PDF_GREY });
   critical.forEach(c => {
     add(`#${c.id} ${c.title} - ${c.location}`, { bold: true, space: 6 });
-    add(`${c.before} -> ${c.after}`);
+    add(`Before: ${c.before}`, { color: PDF_GREY });
+    add(`After: ${c.after}`);
     if (c.note) add(c.note, { color: PDF_RED });
   });
 
@@ -658,8 +688,12 @@ function summaryLines() {
     const items = changesOfType(t.id);
     add(`${t.label} (${items.length})`, { size: 11, bold: true, space: 8 });
     if (!items.length) add("None", { color: PDF_GREY, indent: 12 });
-    items.forEach(c => add(`#${c.id} ${c.title}: ${c.before} -> ${c.after}` +
-      (state.typeOverride[c.id] ? ` (reclassified from ${typeLabel(c.type)})` : ""), { indent: 12 }));
+    items.forEach(c => {
+      add(`#${c.id} ${c.title}` + (state.typeOverride[c.id] ? ` (reclassified from ${typeLabel(c.type)})` : ""),
+        { indent: 12, space: 4 });
+      add(`Before: ${c.before}`, { indent: 32, color: PDF_GREY });
+      add(`After: ${c.after}`, { indent: 32 });
+    });
   });
   return lines;
 }
@@ -897,14 +931,6 @@ document.getElementById("crumbs").innerHTML =
   `Neve Rehovot – Building A <span>/</span> ${DATA.sheet.discipline} <span>/</span> Floor plans`;
 document.getElementById("role").innerHTML =
   ROLES.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
-
-// Read the drawing's aspect ratio once, so boxes line up with the image at any size
-const probe = new Image();
-probe.onload = () => {
-  imgRatio = probe.naturalHeight / probe.naturalWidth;
-  if (state.screen === "compare") updateViewer(false);
-};
-probe.src = DATA.sheet.to.image;
 
 render();
 </script>
