@@ -82,6 +82,11 @@
   /* ---------- Screen 2: Compare ---------- */
   .compare { display: flex; flex-direction: column; height: 100%; }
   .topbar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  /* Back link stays on one line, then a divider, then a two-line heading (name / revision details) */
+  .topbar > a { flex-shrink: 0; white-space: nowrap; padding-right: 16px; border-right: 1px solid var(--border); }
+  .sheet-heading { min-width: 0; }
+  .sheet-name { font-size: 15px; }
+  .sheet-meta { font-size: 12px; color: var(--muted); }
   .product { font-size: 12px; font-weight: 600; color: var(--accent); }
   .warning { padding: 8px 16px; background: #fff8db; border-bottom: 1px solid #f0dc8a; color: #5c4a00; font-size: 13px; }
   .warning a { margin-left: 8px; font-weight: 500; }
@@ -186,6 +191,9 @@
     .split { grid-template-columns: 300px 1fr; }
   }
   @media (max-width: 700px) {
+    /* Top bar: back link on its own row above the sheet heading */
+    .topbar { flex-direction: column; align-items: flex-start; gap: 0; }
+    .topbar > a { border-right: 0; padding-right: 0; }
     /* Header wraps: breadcrumb moves to its own line */
     .header { flex-wrap: wrap; height: auto; padding-block: 8px; gap: 4px 16px; justify-content: space-between; }
     .crumbs { order: 3; flex-basis: 100%; }
@@ -422,8 +430,11 @@ function renderCompare() {
     <div class="compare">
       <div class="topbar">
         <a href="#" data-action="go-documents">← Floor plans</a>
-        <div><span class="product">RevCompare ·</span> <b>${s.number} ${s.title}</b> · Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
-          <span class="muted">· uploaded by ${s.to.uploadedBy}</span></div>
+        <div class="sheet-heading">
+          <div class="sheet-name"><span class="product">RevCompare ·</span> <b>${s.number} ${s.title}</b></div>
+          <div class="sheet-meta">Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
+            · uploaded by ${s.to.uploadedBy}</div>
+        </div>
       </div>
       ${warn ? `<div class="warning">⚠ <b>${esc(warn.title)}.</b> ${esc(warn.note)}
         <a href="#" data-action="select" data-id="${warn.id}">Show in list</a></div>` : ""}
