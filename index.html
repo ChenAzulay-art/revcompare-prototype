@@ -628,7 +628,7 @@ function openCompare() {
 }
 
 // Select a change: expand its group, highlight it in the list and zoom to it on the drawing.
-// source: "list" (clicked an item), "drawing" (clicked a box) or undefined (banner, Next unreviewed)
+// source: "list" (clicked an item), "drawing" (clicked a box), "next" (Next unreviewed) or undefined (banner)
 function selectChange(id, source) {
   const c = findChange(id);
   if (!c) return;
@@ -638,8 +638,10 @@ function selectChange(id, source) {
   renderList();
   updateViewer(true);
   const item = document.getElementById("item-" + id);
-  if (source === "list") document.getElementById("viewer").scrollIntoView({ block: "start", behavior: "smooth" });
+  const showDrawing = () => document.getElementById("viewer").scrollIntoView({ block: "start", behavior: "smooth" });
+  if (source === "list") showDrawing();
   else if (source === "drawing") scrollListTo(item);
+  else if (source === "next") { scrollListTo(item); showDrawing(); }
   else item.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
@@ -658,7 +660,7 @@ function nextUnreviewed() {
   const start = list.findIndex(c => c.id === state.selectedId);
   for (let i = 1; i <= list.length; i++) {
     const c = list[(start + i) % list.length];
-    if (!isReviewed(c)) return selectChange(c.id);
+    if (!isReviewed(c)) return selectChange(c.id, "next");
   }
 }
 
