@@ -152,7 +152,9 @@
   .summary-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
   .summary-head h1 { margin-bottom: 4px; }
   .summary-head p { margin: 0; }
-  .actions { display: flex; gap: 8px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 320px; }
+  .pdf-status { flex-basis: 100%; font-size: 12px; text-align: right; }
+  .pdf-status:empty { display: none; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 24px; margin-bottom: 16px; }
   .card h2 { font-size: 16px; margin: 0 0 8px; }
   .card h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 16px 0 4px; }
@@ -640,6 +642,7 @@ function renderSummary() {
         <div class="actions no-print">
           <button class="btn" data-action="export-pdf">Export PDF</button>
           <button class="btn primary" data-action="go-documents">Back to documents</button>
+          <div class="pdf-status muted" id="pdf-status" role="status"></div>
         </div>
       </div>
       <section class="card">
@@ -773,16 +776,30 @@ function buildPDF() {
   return pdf;
 }
 
-// When the page is hosted on claude.ai, the viewer saves files for it (window.claude only exists there)
-const hostedDownloads = window.claude ? window.claude.use("downloads") : Promise.resolve(null);
+// Short message under the Export PDF button
+function pdfStatus(text) {
+  const el = document.getElementById("pdf-status");
+  if (el) el.textContent = text;
+}
 
 async function downloadPDF() {
   const filename = `${DATA.sheet.number}_review_summary.pdf`;
   const pdf = buildPDF();
   if (window.claude) {
-    // Hosted: the viewer shows a confirmation, then saves the file
-    const downloads = await hostedDownloads;
-    if (downloads) downloads.save({ filename, data: pdf }).catch(() => {});   // declined or unavailable
+    // Hosted on claude.ai: the viewer shows a confirmation, then saves the file.
+    // Looked up on each tap (the result is cached), so a viewer that was still starting at load is fine.
+    pdfStatus("Preparing PDF…");
+    const downloads = await window.claude.use("downloads");
+    if (!downloads) return pdfStatus("This view can't save files. Try opening the link in a browser.");
+    try {
+      await downloads.save({ filename, data: pdf });
+      pdfStatus("PDF saved.");
+    } catch (err) {
+      const code = err && err.code;
+      if (code === "declined") pdfStatus("Download cancelled.");
+      else if (code === "rate_limited") pdfStatus("A save prompt is already open. Try again in a moment.");
+      else pdfStatus(`Couldn't save the PDF here (${code || "unknown error"}). Try opening the link in a browser.`);
+    }
     return;
   }
   // Opened from disk: a normal browser download
