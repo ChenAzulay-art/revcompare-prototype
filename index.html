@@ -760,10 +760,22 @@ function buildPDF() {
   return pdf;
 }
 
-function downloadPDF() {
+// When the page is hosted on claude.ai, the viewer saves files for it (window.claude only exists there)
+const hostedDownloads = window.claude ? window.claude.use("downloads") : Promise.resolve(null);
+
+async function downloadPDF() {
+  const filename = `${DATA.sheet.number}_review_summary.pdf`;
+  const pdf = buildPDF();
+  if (window.claude) {
+    // Hosted: the viewer shows a confirmation, then saves the file
+    const downloads = await hostedDownloads;
+    if (downloads) downloads.save({ filename, data: pdf }).catch(() => {});   // declined or unavailable
+    return;
+  }
+  // Opened from disk: a normal browser download
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([buildPDF()], { type: "application/pdf" }));
-  link.download = `${DATA.sheet.number}_review_summary.pdf`;
+  link.href = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
