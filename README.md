@@ -1,6 +1,6 @@
 # RevCompare
 
-A clickable prototype for reviewing changes between drawing revisions, built for a Ramdor home assignment.
+A clickable prototype for reviewing changes between drawing revisions, built for home assignment.
 
 **Live:** https://chenazulay-art.github.io/revcompare-prototype/
 
