@@ -1,6 +1,6 @@
 # RevCompare
 
-A clickable prototype for reviewing changes between drawing revisions, built for a Ramdor PM home assignment.
+A clickable prototype for reviewing changes between drawing revisions, built for a Ramdor home assignment.
 
 **Live:** https://chenazulay-art.github.io/revcompare-prototype/
 
@@ -8,4 +8,4 @@ A clickable prototype for reviewing changes between drawing revisions, built for
 
 **Run locally:** open `index.html` in a browser, or `RevCompare_prototype.html` on its own as a single file with the drawings embedded.
 
-Built with Claude Code. The build prompt is in `BUILD_PROMPT.md`.
+Built with Claude Code.
