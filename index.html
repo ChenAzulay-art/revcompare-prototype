@@ -59,6 +59,8 @@
   /* ---------- Screen 1: Documents ---------- */
   .page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
   h1 { font-size: 20px; margin: 0 0 16px; }
+  h1.with-subtitle { margin-bottom: 2px; }
+  .page-subtitle { margin: 0 0 16px; color: var(--muted); }
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   table.docs { width: 100%; border-collapse: collapse; }
   .docs th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em;
@@ -392,11 +394,13 @@ function reviewStatusHTML() {
   return `<span class="status">${x} of ${n} reviewed by you</span>`;
 }
 
-// One row per revision. The Name opens the original file; only the changes badge opens the compare view.
+// One row per revision. The file name opens the original file; only the changes badge opens the compare view.
+const revFileName = rev => `${DATA.sheet.number}_Rev${rev.rev}.pdf`;
+
 function docRowHTML(revKey, statusTag, changesCell) {
-  const s = DATA.sheet, rev = s[revKey];
+  const rev = DATA.sheet[revKey];
   return `<tr>
-    <td><a href="#" data-action="open-original" data-rev="${revKey}">${s.number} ${s.title}</a></td>
+    <td><a href="#" data-action="open-original" data-rev="${revKey}">${revFileName(rev)}</a></td>
     <td data-label="Rev">Rev ${rev.rev}</td><td data-label="Status">${statusTag}</td>
     <td data-label="Uploaded by">${rev.uploadedBy}</td><td data-label="Date">${fmtDate(rev.date)}</td>
     <td data-label="Changes vs. previous rev">${changesCell}</td></tr>`;
@@ -407,9 +411,10 @@ function renderDocuments() {
     ${plural(totalCount(), "change")} · ${criticalCount()} critical</button>${reviewStatusHTML()}`;
   app.innerHTML = `
     <div class="page">
-      <h1>Floor plans</h1>
+      <h1 class="with-subtitle">${DATA.sheet.number} ${DATA.sheet.title}</h1>
+      <p class="page-subtitle">Revision history</p>
       <div class="table-card"><table class="docs">
-        <thead><tr><th>Name</th><th>Rev</th><th>Status</th><th>Uploaded by</th><th>Date</th><th>Changes vs. previous rev</th></tr></thead>
+        <thead><tr><th>File</th><th>Rev</th><th>Status</th><th>Uploaded by</th><th>Date</th><th>Changes vs. previous rev</th></tr></thead>
         <tbody>
           ${docRowHTML("to", `<span class="tag current">Current</span>`, badge)}
           ${docRowHTML("from", `<span class="tag">Superseded</span>`, `<span class="muted">Initial upload</span>`)}
@@ -426,7 +431,7 @@ function renderOriginal() {
   app.innerHTML = `
     <div class="original">
       <div class="topbar">
-        <a href="#" data-action="go-documents">← Floor plans</a>
+        <a href="#" data-action="go-documents">← Revision history</a>
         <b>${s.number} · Rev ${rev.rev} · Original file</b>
       </div>
       <div class="original-view"><img src="${rev.image}" alt="${s.number} Rev ${rev.rev}"></div>
@@ -442,7 +447,7 @@ function renderCompare() {
   app.innerHTML = `
     <div class="compare">
       <div class="topbar">
-        <a href="#" data-action="go-documents">← Floor plans</a>
+        <a href="#" data-action="go-documents">← Revision history</a>
         <div class="sheet-heading">
           <div class="sheet-name"><span class="product">RevCompare ·</span> <b>${s.number} ${s.title}</b></div>
           <div class="sheet-meta">Rev ${s.from.rev} (${fmtDate(s.from.date)}) → Rev ${s.to.rev} (${fmtDate(s.to.date)})
@@ -1059,7 +1064,8 @@ window.addEventListener("resize", () => {
 
 /* ---------- Init ---------- */
 document.getElementById("crumbs").innerHTML =
-  `Neve Rehovot – Building A <span>/</span> ${DATA.sheet.discipline} <span>/</span> Floor plans`;
+  `Neve Rehovot – Building A <span>/</span> ${DATA.sheet.discipline} <span>/</span> Floor plans` +
+  ` <span>/</span> ${DATA.sheet.number} ${DATA.sheet.title}`;
 document.getElementById("role").innerHTML =
   ROLES.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
 
